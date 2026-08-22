@@ -11,8 +11,10 @@ data/processed/*
 !data/raw/.gitkeep
 !data/processed/.gitkeep
 
-# Models (large binaries; the one shipped for grading is kept, others ignored)
+# Models (only the final shipped checkpoint is committed; experiment
+# checkpoints stay local/MLflow-tracked instead of bloating git history)
 models/*.pt
+!models/model.pt
 !models/.gitkeep
 
 # MLflow
