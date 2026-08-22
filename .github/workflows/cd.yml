@@ -1,0 +1,77 @@
+name: CD - Deploy & Smoke Test
+
+# Runs after CI succeeds on main. Pulls the freshly-published image from
+# GHCR and (re)deploys it with Docker Compose, then runs a smoke test
+# against the live /health and /predict endpoints. The pipeline fails
+# (and should block/roll back) if smoke tests fail.
+#
+# This workflow deploys on the GitHub Actions runner itself so the whole
+# flow is demonstrable with zero external infrastructure. To target a real
+# VM instead, replace the "Deploy" step with an SSH-based deploy (e.g.
+# appleboy/ssh-action) that runs the same `docker compose pull && up -d`
+# commands on the remote host.
+
+on:
+  workflow_run:
+    workflows: ["CI - Test, Build & Publish Image"]
+    types: [completed]
+    branches: [main]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  deploy:
+    if: github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull latest image
+        run: docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+
+      - name: Deploy with Docker Compose
+        run: |
+          export IMAGE_NAME=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          export IMAGE_TAG=latest
+          docker compose -f docker-compose.yml up -d inference
+
+      - name: Wait for service to become healthy
+        run: |
+          for i in $(seq 1 20); do
+            if curl -sf http://localhost:8000/health; then
+              echo "Service is up"
+              exit 0
+            fi
+            echo "Waiting for service... ($i/20)"
+            sleep 3
+          done
+          echo "Service did not become healthy in time"
+          docker logs catsdogs-inference || true
+          exit 1
+
+      - name: Run smoke tests
+        run: bash scripts/smoke_test.sh http://localhost:8000
+
+      - name: Roll back on failure
+        if: failure()
+        run: |
+          echo "Smoke tests failed - stopping the bad deployment."
+          docker compose -f docker-compose.yml down
+          exit 1
+
+      - name: Tear down (CI runner cleanup)
+        if: always()
+        run: docker compose -f docker-compose.yml down

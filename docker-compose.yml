@@ -1,0 +1,32 @@
+# M4 deployment target: Docker Compose.
+# Brings up the inference service plus a Prometheus instance scraping its
+# /metrics endpoint, so monitoring (M5) is part of the same `docker compose up`.
+services:
+  inference:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    image: ${IMAGE_NAME:-catsdogs-inference}:${IMAGE_TAG:-latest}
+    container_name: catsdogs-inference
+    ports:
+      - "8000:8000"
+    environment:
+      - MODEL_PATH=models/model.pt
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+
+  prometheus:
+    image: prom/prometheus:v2.53.0
+    container_name: catsdogs-prometheus
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
+    depends_on:
+      - inference
+    restart: unless-stopped

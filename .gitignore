@@ -1,0 +1,36 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.venv/
+venv/
+
+# Data (tracked by DVC, not git)
+data/raw/*
+data/processed/*
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+
+# Models (large binaries; the one shipped for grading is kept, others ignored)
+models/*.pt
+!models/.gitkeep
+
+# MLflow
+mlruns/
+mlartifacts/
+
+# DVC
+.dvc/cache
+.dvc/tmp
+
+# Kaggle credentials - NEVER commit
+kaggle.json
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/
+
+# Logs
+*.log
+logs/
