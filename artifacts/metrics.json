@@ -1,0 +1,9 @@
+{
+  "final_train_loss": 0.37447043384114903,
+  "final_val_loss": 0.14240204418698946,
+  "final_val_accuracy": 0.9166666666666666,
+  "final_val_f1": 0.9230769230769231,
+  "best_val_accuracy": 0.9166666666666666,
+  "epochs": 2,
+  "mlflow_run_id": "d9b2504e8d964e48a8ee01f3e57e2ff7"
+}

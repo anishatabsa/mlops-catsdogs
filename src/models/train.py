@@ -11,6 +11,7 @@ Usage:
         --experiment cats-vs-dogs
 """
 import argparse
+import json
 import time
 from pathlib import Path
 
@@ -172,6 +173,21 @@ def main():
         out_path.parent.mkdir(parents=True, exist_ok=True)
         torch.save(model.state_dict(), out_path)
         mlflow.pytorch.log_model(model, artifact_path="model")
+
+        # DVC-tracked metrics summary (dvc.yaml declares this as the `train`
+        # stage's metrics output, so `dvc metrics show`/`dvc metrics diff`
+        # work across pipeline runs).
+        metrics_summary = {
+            "final_train_loss": train_losses[-1],
+            "final_val_loss": val_losses[-1],
+            "final_val_accuracy": val_acc,
+            "final_val_f1": val_f1,
+            "best_val_accuracy": best_val_acc,
+            "epochs": args.epochs,
+            "mlflow_run_id": run.info.run_id,
+        }
+        with open("artifacts/metrics.json", "w") as f:
+            json.dump(metrics_summary, f, indent=2)
 
         print(f"Saved model to {out_path}, MLflow run_id={run.info.run_id}")
 

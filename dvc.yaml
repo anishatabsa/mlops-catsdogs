@@ -7,15 +7,9 @@ stages:
     outs:
       - data/processed
 
-  train:
-    cmd: python -m src.models.train --data-dir data/processed --output models/model.pt
-    deps:
-      - data/processed
-      - src/models/train.py
-      - src/models/model.py
-      - src/models/dataset.py
-    outs:
-      - models/model.pt
-    metrics:
-      - artifacts/metrics.json:
-          cache: false
+  # Training is intentionally NOT a DVC pipeline stage: model versioning here
+  # is handled by MLflow (params/metrics/artifacts per run - see mlruns/),
+  # while DVC's job is strictly dataset versioning (raw + processed images),
+  # per the assignment split of responsibilities. The final model.pt is
+  # small enough to commit directly to git for grading convenience.
+  # Run it with: python -m src.models.train --data-dir data/processed --output models/model.pt
