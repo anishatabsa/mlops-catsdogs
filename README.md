@@ -12,6 +12,53 @@ CI, CD, and monitoring — using only open-source tooling.
 | M4 | Docker Compose deployment, CD, smoke tests | `docker-compose.yml`, `.github/workflows/cd.yml` |
 | M5 | Logging, metrics, post-deploy performance tracking | `src/monitoring`, `scripts/simulate_monitoring.py` |
 
+> **Before you submit — run this on real data.** `data/raw/`, `data/processed/`, `models/model.pt`,
+> and `mlruns/` in this repo right now are the result of a **synthetic smoke test**
+> (auto-generated colored shapes standing in for cats/dogs) used to verify every stage of the
+> pipeline actually runs end to end — not the real Kaggle dataset. See **"Run this on your VM"**
+> below for the exact commands to pull the real dataset, retrain, and regenerate all of these
+> with real results before you submit or record your demo.
+
+## Run this on your VM
+
+```bash
+git clone <this-repo>        # or unzip the delivered archive
+cd mlops-catsdogs
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements-dev.txt
+
+# 1. Get the REAL dataset (needs a Kaggle account + API token, see data/README.md)
+pip install kaggle
+mkdir -p ~/.kaggle && echo '{"username":"YOUR_USERNAME","key":"YOUR_KEY"}' > ~/.kaggle/kaggle.json
+chmod 600 ~/.kaggle/kaggle.json
+python -m src.data.download_data --output data/raw
+
+# 2. Replace the synthetic processed data + DVC tracking with the real thing
+rm -rf data/processed
+python -m src.data.preprocess --raw-dir data/raw --processed-dir data/processed
+dvc add data/raw
+dvc commit -f preprocess
+dvc push        # optional: point .dvc/config at your own remote (S3/GCS/etc.) first
+
+# 3. Retrain on real data (swaps out the synthetic models/model.pt + mlruns/ run)
+python -m src.models.train --data-dir data/processed --epochs 10 --output models/model.pt
+mlflow ui --backend-store-uri mlruns --port 5000   # inspect the real run
+
+# 4. Build & run the container (blocked in the sandbox that built this repo, but fine here)
+docker build -f docker/Dockerfile -t catsdogs-inference:latest .
+docker compose up -d --build
+bash scripts/smoke_test.sh http://localhost:8000
+
+# 5. Push to GitHub to trigger CI (test+build+publish) and CD (deploy+smoke test) for real
+git remote add origin <your-github-repo-url>
+git push -u origin main
+```
+
+After step 3, commit the real `models/model.pt`, `data/raw.dvc`, `dvc.lock`, and the
+`artifacts/*.png` + `artifacts/metrics.json` it produces — those replace the synthetic
+versions currently in this delivered copy. Then follow `docs/demo_script.md` for the
+screen recording.
+
 ## Repository layout
 
 ```
