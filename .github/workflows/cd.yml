@@ -12,6 +12,7 @@ name: CD - Deploy & Smoke Test
 # commands on the remote host.
 
 on:
+  workflow_dispatch:
   workflow_run:
     workflows: ["CI - Test, Build & Publish Image"]
     types: [completed]
@@ -23,7 +24,7 @@ env:
 
 jobs:
   deploy:
-    if: github.event.workflow_run.conclusion == 'success'
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     permissions:
       contents: read
