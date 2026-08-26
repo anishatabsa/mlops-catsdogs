@@ -11,6 +11,7 @@ Usage:
         --experiment cats-vs-dogs
 """
 import argparse
+import copy
 import json
 import time
 from pathlib import Path
@@ -123,7 +124,10 @@ def main():
 
         train_losses, val_losses = [], []
         best_val_acc = 0.0
-        last_labels, last_preds = [], []
+        best_val_f1 = 0.0
+        best_epoch = 0
+        best_state_dict = None
+        best_labels, best_preds = [], []
 
         for epoch in range(1, args.epochs + 1):
             model.train()
@@ -140,7 +144,6 @@ def main():
             train_loss = running_loss / max(n, 1)
 
             val_loss, val_acc, val_f1, labels, preds = evaluate(model, val_loader, device, criterion)
-            last_labels, last_preds = labels, preds
 
             train_losses.append(train_loss)
             val_losses.append(val_loss)
@@ -156,19 +159,38 @@ def main():
                   f"train_loss={train_loss:.4f} val_loss={val_loss:.4f} "
                   f"val_acc={val_acc:.4f} val_f1={val_f1:.4f}")
 
-            best_val_acc = max(best_val_acc, val_acc)
+            # Track the best checkpoint by validation accuracy - a small CNN
+            # trained from scratch for many epochs commonly overfits past
+            # its peak, so the LAST epoch is often worse than an earlier
+            # one. We ship the best checkpoint, not just whatever the final
+            # epoch happened to produce.
+            if val_acc > best_val_acc:
+                best_val_acc = val_acc
+                best_val_f1 = val_f1
+                best_epoch = epoch
+                best_state_dict = copy.deepcopy(model.state_dict())
+                best_labels, best_preds = labels, preds
 
-        # Artifacts: loss curve + confusion matrix
+        mlflow.log_metric("best_val_accuracy", best_val_acc)
+        mlflow.log_metric("best_epoch", best_epoch)
+        print(f"Best epoch: {best_epoch}/{args.epochs} "
+              f"(val_acc={best_val_acc:.4f}, val_f1={best_val_f1:.4f}) - "
+              "restoring these weights before saving.")
+
+        # Restore the best checkpoint's weights before saving/logging -
+        # NOT necessarily the weights from the final epoch's training loop.
+        model.load_state_dict(best_state_dict)
+
+        # Artifacts: loss curve (full history) + confusion matrix (best epoch)
         Path("artifacts").mkdir(exist_ok=True)
         loss_curve_path = "artifacts/loss_curve.png"
         cm_path = "artifacts/confusion_matrix.png"
         plot_loss_curve(train_losses, val_losses, loss_curve_path)
-        plot_confusion_matrix(last_labels, last_preds, cm_path)
+        plot_confusion_matrix(best_labels, best_preds, cm_path)
         mlflow.log_artifact(loss_curve_path)
         mlflow.log_artifact(cm_path)
-        mlflow.log_metric("best_val_accuracy", best_val_acc)
 
-        # Save + log model
+        # Save + log model (best checkpoint)
         out_path = Path(args.output)
         out_path.parent.mkdir(parents=True, exist_ok=True)
         torch.save(model.state_dict(), out_path)
@@ -182,14 +204,20 @@ def main():
             "final_val_loss": val_losses[-1],
             "final_val_accuracy": val_acc,
             "final_val_f1": val_f1,
+            "best_epoch": best_epoch,
             "best_val_accuracy": best_val_acc,
+            "best_val_f1": best_val_f1,
             "epochs": args.epochs,
             "mlflow_run_id": run.info.run_id,
+            "note": "models/model.pt is the BEST-epoch checkpoint by val_accuracy, "
+                    "not necessarily the final epoch (small CNNs trained from "
+                    "scratch commonly overfit past their peak).",
         }
         with open("artifacts/metrics.json", "w") as f:
             json.dump(metrics_summary, f, indent=2)
 
-        print(f"Saved model to {out_path}, MLflow run_id={run.info.run_id}")
+        print(f"Saved BEST checkpoint (epoch {best_epoch}) to {out_path}, "
+              f"MLflow run_id={run.info.run_id}")
 
 
 if __name__ == "__main__":

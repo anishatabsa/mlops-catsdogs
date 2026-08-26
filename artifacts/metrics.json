@@ -1,9 +1,12 @@
 {
-  "final_train_loss": 0.37447043384114903,
-  "final_val_loss": 0.14240204418698946,
-  "final_val_accuracy": 0.9166666666666666,
-  "final_val_f1": 0.9230769230769231,
-  "best_val_accuracy": 0.9166666666666666,
-  "epochs": 2,
-  "mlflow_run_id": "d9b2504e8d964e48a8ee01f3e57e2ff7"
+  "final_train_loss": 0.5495412724789495,
+  "final_val_loss": 0.5403997874259949,
+  "final_val_accuracy": 0.7225,
+  "final_val_f1": 0.6837606837606838,
+  "best_epoch": 8,
+  "best_val_accuracy": 0.7225,
+  "best_val_f1": 0.7047872340425532,
+  "epochs": 10,
+  "mlflow_run_id": "9dfd35cdf26e4e01832bbeeceab7224a",
+  "note": "models/model.pt is the BEST-epoch checkpoint by val_accuracy, not necessarily the final epoch (small CNNs trained from scratch commonly overfit past their peak)."
 }

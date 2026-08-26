@@ -1,4 +1,12 @@
 # Core ML
+# CPU-only wheels: the plain PyPI torch/torchvision wheels bundle full
+# NVIDIA CUDA libraries (nvidia-cublas-cu12, nvidia-cudnn-cu12, etc.) -
+# several GB of downloads this inference container never uses, since it
+# has no GPU. --extra-index-url points pip at PyTorch's own CPU-only
+# wheel index; pip still resolves the exact pinned versions below, just
+# as the "+cpu" build (e.g. torch-2.3.1+cpu), which is a small fraction
+# of the size.
+--extra-index-url https://download.pytorch.org/whl/cpu
 torch==2.3.1
 torchvision==0.18.1
 numpy==1.26.4
@@ -20,8 +28,19 @@ prometheus-client==0.20.0
 
 # Data versioning
 dvc==3.51.2
+# Pin explicitly: newer pathspec releases dropped a symbol dvc's scmrepo
+# imports, causing "cannot import name '_DIR_MARK'" on `dvc add`.
+pathspec==0.11.2
 
 # Utilities
 requests==2.32.3
 tqdm==4.66.4
 python-dotenv==1.0.1
+
+# mlflow 2.14.1 still imports pkg_resources (via requirements_utils.py).
+# Pinned to a concrete version so a plain "already satisfied" check can't
+# mask a corrupted/partial install - if you still hit
+# "ModuleNotFoundError: No module named 'pkg_resources'" after installing
+# this, force a clean reinstall:
+#   pip install --force-reinstall --no-cache-dir setuptools==75.8.0
+setuptools==75.8.0

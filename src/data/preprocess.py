@@ -13,6 +13,7 @@ every epoch sees fresh augmented variants of the same underlying image.
 """
 import argparse
 import random
+import warnings
 from pathlib import Path
 from typing import List, Tuple
 
@@ -20,6 +21,7 @@ from PIL import Image, UnidentifiedImageError
 
 IMG_SIZE = (224, 224)
 CLASSES = ["cat", "dog"]
+IMAGE_EXTS = {".jpg", ".jpeg", ".png"}
 
 # Different Kaggle mirrors use different folder casing/naming for the same classes.
 CLASS_DIR_ALIASES = {
@@ -28,20 +30,50 @@ CLASS_DIR_ALIASES = {
 }
 
 
+def _count_images(d: Path) -> int:
+    return sum(1 for f in d.glob("*") if f.suffix.lower() in IMAGE_EXTS)
+
+
 def _find_class_dir(raw_dir: Path, class_name: str) -> Path:
+    """
+    Locate the directory holding this class's images.
+
+    Collects every direct-child and nested (one-or-more-levels-deep) alias
+    match and picks the one with the MOST image files, rather than the
+    first alias that happens to match. This matters because a raw_dir can
+    contain more than one plausible candidate at once - e.g. a small
+    leftover/sample folder alongside the real, much larger dataset - and
+    silently picking the first match would train on the wrong data without
+    any error. Warns when more than one non-trivial candidate is found.
+    """
+    candidates = []
+    seen = set()
     for alias in CLASS_DIR_ALIASES[class_name]:
-        # Direct child
-        candidate = raw_dir / alias
-        if candidate.is_dir():
-            return candidate
-        # Nested one level deep (e.g. raw_dir/training_set/training_set/cats)
-        for match in raw_dir.rglob(alias):
-            if match.is_dir():
-                return match
-    raise FileNotFoundError(
-        f"Could not locate a '{class_name}' image directory under {raw_dir}. "
-        f"Tried aliases: {CLASS_DIR_ALIASES[class_name]}"
-    )
+        for candidate in [raw_dir / alias, *raw_dir.rglob(alias)]:
+            if candidate.is_dir() and candidate not in seen:
+                seen.add(candidate)
+                candidates.append(candidate)
+
+    if not candidates:
+        raise FileNotFoundError(
+            f"Could not locate a '{class_name}' image directory under {raw_dir}. "
+            f"Tried aliases: {CLASS_DIR_ALIASES[class_name]}"
+        )
+
+    counts = [(c, _count_images(c)) for c in candidates]
+    counts.sort(key=lambda pair: pair[1], reverse=True)
+    best_dir, best_count = counts[0]
+
+    non_trivial = [c for c in counts if c[1] > 0]
+    if len(non_trivial) > 1:
+        warnings.warn(
+            f"Multiple '{class_name}' image directories found under {raw_dir}: "
+            + ", ".join(f"{c} ({n} images)" for c, n in counts)
+            + f". Using the largest: {best_dir} ({best_count} images). "
+            "If that's not the one you meant, remove or rename the others."
+        )
+
+    return best_dir
 
 
 def scan_dataset(raw_dir: str) -> List[Tuple[Path, str]]:
